@@ -16,7 +16,29 @@ function createServer() {
         });
 
         req.on('end', () => {
-          const expense = JSON.parse(body);
+          let expense;
+
+          const contentType = req.headers['content-type'];
+
+          try {
+            if (contentType.includes('application/json')) {
+              expense = JSON.parse(body);
+            } else if (
+              contentType.includes('application/x-www-form-urlencoded')
+            ) {
+              const parsed = new URLSearchParams(body);
+
+              expense = Object.fromEntries(parsed.entries());
+            } else {
+              res.writeHead(415);
+
+              return res.end('Unsupported Content-Type');
+            }
+          } catch (err) {
+            res.writeHead(400);
+
+            return res.end('Invalid body');
+          }
 
           const { date, title, amount } = expense;
 
@@ -28,11 +50,13 @@ function createServer() {
 
           fs.writeFileSync('db/expense.json', JSON.stringify(expense));
 
-          const file = fs.readFileSync('db/expense.json');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
 
-          res.statusCode = 200;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(file);
+          res.end(JSON.stringify(expense));
+
+          // res.end(`<h1>Date: ${date}</h1>
+          //   <h1>Title: ${title}</h1>
+          //   <h1>Amount: ${amount}</h1>`);
         });
       } catch (err) {
         res.writeHead(500);
