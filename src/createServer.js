@@ -1,7 +1,6 @@
 'use strict';
 
 const http = require('http');
-const { IncomingForm } = require('formidable');
 const fs = require('fs');
 
 function createServer() {
@@ -9,33 +8,32 @@ function createServer() {
   // Return instance of http.Server class
   return http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/add-expense') {
-      const form = new IncomingForm({ multiples: false });
-
       try {
-        const [fields] = await form.parse(req);
+        let body = '';
 
-        const { date, title, amount } = fields;
+        req.on('data', (chunk) => {
+          body += chunk.toString();
+        });
 
-        if (!date || !title || !amount) {
-          res.writeHead(400, { 'Content-Type': 'text/plain' });
+        req.on('end', () => {
+          const expense = JSON.parse(body);
 
-          return res.end('Missing required fields');
-        }
+          const { date, title, amount } = expense;
 
-        const result = JSON.stringify(fields);
+          if (!date || !title || !amount) {
+            res.writeHead(400);
 
-        // console.log('Fields:', fields);
+            return res.end('Missing required fields');
+          }
 
-        fs.writeFileSync('db/expense.json', result);
+          fs.writeFileSync('db/expense.json', JSON.stringify(expense));
 
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(result);
+          const file = fs.readFileSync('db/expense.json');
 
-        // res.end(`<div>
-        //   <h1>Date: ${fields['date']}</h1>
-        //   <h1>Title: ${fields['title']}</h1>
-        //   <h1>Amount: ${fields['amount']}</h1>
-        //   </div`);
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(file);
+        });
       } catch (err) {
         res.writeHead(500);
         res.end('Error parsing form');
@@ -44,7 +42,8 @@ function createServer() {
       res.statusCode = 200;
       res.setHeader('Content-type', 'text/html');
 
-      res.end(`<form method="POST" action="/submit-expense" enctype="multipart/form-data">
+      res.end(`<h1>Input data</h1>
+        <form method="POST" action="/add-expense">
         <input name="date" type="date" required>
         <input name="title" type="text" required>
         <input name="amount" type="number" required>
